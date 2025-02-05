@@ -8,6 +8,12 @@ body {
   font-family: Arial, sans-serif;
   padding: 10px;
 }
+.messages{
+  border: 2px solid #000; /* Optional: adds a border for visibility */
+  
+  overflow-y: auto; /* Enables vertical scrolling when content exceeds height */
+  height: 200px; /* Set a fixed height for the div */
+}
 
 input, button {
   width: 100%;
