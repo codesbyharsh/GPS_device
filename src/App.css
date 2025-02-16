@@ -1,102 +1,170 @@
+/* Global Styles */
 body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: linear-gradient(135deg, #74ABE2, #5563DE);
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
-  min-height: 100vh;
-  margin: 0;
-  font-family: 'Helvetica Neue', Arial, sans-serif;
-  background: #000000; /* Set background to black */
 }
 
+/* Container */
 .container {
-  background-color: #e72d2d;
-  padding: 40px 30px;
-  border-radius: 12px;
-  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.2);
-  max-width: 400px;
-  width: 100%;
-  text-align: center;
-  transition: transform 0.3s ease-in-out;
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 20px 30px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 500px;
 }
 
-.container:hover {
-  transform: translateY(-5px);
-}
-
+/* Headings */
 h2 {
-  margin-bottom: 30px;
-  color: #0d00ff;
-  font-size: 24px;
+  text-align: center;
+  color: #333;
 }
 
-input[type="text"], input[type="password"] {
-  width: 100%;
-  padding: 15px;
-  margin: 12px 0;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  box-sizing: border-box;
-  font-size: 16px;
-  transition: border-color 0.3s ease-in-out, box-shadow 0.3s ease-in-out;
-  background-color: #f9f9f9;
+/* Forms */
+form {
+  display: flex;
+  flex-direction: column;
 }
 
-input[type="text"]:focus, input[type="password"]:focus {
-  border-color: #e91e63;
-  box-shadow: 0 0 8px rgba(233, 30, 99, 0.3);
+form label {
+  font-weight: bold;
+  margin-bottom: 5px;
 }
 
-button {
-  width: 100%;
-  padding: 15px;
-  margin-top: 25px;
-  background: linear-gradient(to right, #ff9800, #e91e63);
-  color: #ffffff;
+form input,
+form select {
+  padding: 10px;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+form button {
+  background-color: #5563de;
+  color: #fff;
   border: none;
-  border-radius: 6px;
-  font-size: 16px;
+  padding: 10px;
+  border-radius: 4px;
   cursor: pointer;
-  transition: background 0.3s, transform 0.2s;
+  transition: background-color 0.2s;
 }
 
-button:hover {
-  background: linear-gradient(to right, #e91e63, #ff9800);
-  transform: translateY(-2px);
+form button:hover {
+  background-color: #4453bf;
 }
 
-.footer {
-  margin-top: 20px;
-  color: #888;
-  font-size: 14px;
+/* Toggle Link */
+.toggle-link {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 0.9em;
 }
 
-.footer a {
-  color: #e91e63;
-  text-decoration: none;
-  transition: color 0.3s;
+.toggle-link span {
+  color: #5563de;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
-.footer a:hover {
-  color: #281de6;
+/* User Info */
+.user-info p {
+  margin: 5px 0;
 }
 
-@media (max-width: 768px) {
-  .container {
-    padding: 20px;
-  }
-  
-  input[type="text"], input[type="password"] {
-    padding: 12px;
-  }
+/* Logout Button */
+.logout-btn {
+  background-color: #e74c3c;
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background-color 0.2s;
+}
 
-  button {
-    padding: 12px;
-  }
+.logout-btn:hover {
+  background-color: #c0392b;
+}
+
+/* Controls */
+.controls button {
+  background-color: #5563de;
+  color: #fff;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background-color 0.2s;
+}
+
+.controls button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.controls button:hover:not(:disabled) {
+  background-color: #4453bf;
+}
+
+/* Location Info */
+.location-info p {
+  margin: 5px 0;
+}
+
+/* Messages */
+.messages h4 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.messages button {
+  background-color: #5563de;
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.messages button:hover {
+  background-color: #4453bf;
+}
+
+.error {
+  color: red;
+  margin-top: 10px;
+}
+
+.auth-header{
+  display: flex;
+  justify-content: space-between;
+}
+.red{
+  color: red;
+  border: red;
+}
+button{
+  margin: 10px;
+}
+
+.container{
+  background: #29a997;
+  color: #2e3841;
 }
 
 .messages{
-  border: 2px solid #000; /* Optional: adds a border for visibility */
-  
-  overflow-y: auto; /* Enables vertical scrolling when content exceeds height */
-  height: 200px; /* Set a fixed height for the div */
+ padding: 10px;
+    height: 200px;
+    overflow-y: auto;
+ border: 2px dashed black;
 }
