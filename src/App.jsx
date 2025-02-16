@@ -3,7 +3,7 @@ import axios from 'axios';
 import './App.css';
 
 function App() {
-  // Mode: "login" or "register"
+
   const [mode, setMode] = useState('login');
 
   // Form states
