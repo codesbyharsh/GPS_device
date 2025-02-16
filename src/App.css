@@ -1,102 +1,170 @@
+/* Global Styles */
 body {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
   margin: 0;
   font-family: Arial, sans-serif;
-  padding: 10px;
-}
-.messages{
-  border: 2px solid #000; /* Optional: adds a border for visibility */
-  
-  overflow-y: auto; /* Enables vertical scrolling when content exceeds height */
-  height: 200px; /* Set a fixed height for the div */
+  background: linear-gradient(135deg, #74ABE2, #5563DE);
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-input, button {
-  width: 100%;
-  max-width: 300px;
-  margin-bottom: 10px;
-  padding: 10px;
-  font-size: 16px;
-}
-
-button {
-  cursor: pointer;
-}
-
-p {
-  text-align: center;
-  margin: 10px 0;
-}
-
-div {
-  width: 100%;
-  max-width: 300px;
-}
-
-@media (max-width: 768px) {
-  body {
-    padding: 20px;
-  }
-
-  input, button, div {
-    max-width: 100%;
-  }
-}
-
-div h4 {
-  text-align: center;
-  margin: 10px 0;
-}
-
-div div {
-  margin-top: 10px;
-}
-
-
-/* General styling for the container */
+/* Container */
 .container {
-  background-color: #3f3d3d;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-  max-width: 400px;
-  width: 100%;
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 20px 30px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 500px;
 }
 
-/* Style the input field */
-.busnumberfeild {
-  width: 100%; /* Make the input field the same width as the container */
+/* Headings */
+h2 {
+  text-align: center;
+  color: #333;
+}
+
+/* Forms */
+form {
+  display: flex;
+  flex-direction: column;
+}
+
+form label {
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+form input,
+form select {
   padding: 10px;
-  margin-bottom: 10px;
-  border: 1px solid #ffffff;
+  margin-bottom: 15px;
+  border: 1px solid #ccc;
   border-radius: 4px;
-  font-size: 16px;
-  box-sizing: border-box; /* Ensure padding and borders are included in the element's total width and height */
 }
 
-/* Style the buttons */
-button {
-  width: 100%; /* Same width as the input field */
-  padding: 10px;
-  margin-bottom: 10px;
+form button {
+  background-color: #5563de;
+  color: #fff;
   border: none;
+  padding: 10px;
   border-radius: 4px;
-  font-size: 16px;
   cursor: pointer;
+  transition: background-color 0.2s;
 }
 
-/* Style the location updates box */
-.location-updates {
-  width: 100%; /* Same width as the input field and buttons */
-  max-height: 150px;
-  overflow-y: auto;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  padding: 0px;
+form button:hover {
+  background-color: #4453bf;
+}
+
+/* Toggle Link */
+.toggle-link {
   margin-top: 10px;
-  background-color: #000000;
+  text-align: center;
+  font-size: 0.9em;
+}
+
+.toggle-link span {
+  color: #5563de;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* User Info */
+.user-info p {
+  margin: 5px 0;
+}
+
+/* Logout Button */
+.logout-btn {
+  background-color: #e74c3c;
+  border: none;
+  color: #fff;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background-color 0.2s;
+}
+
+.logout-btn:hover {
+  background-color: #c0392b;
+}
+
+/* Controls */
+.controls button {
+  background-color: #5563de;
+  color: #fff;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin-right: 10px;
+  transition: background-color 0.2s;
+}
+
+.controls button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.controls button:hover:not(:disabled) {
+  background-color: #4453bf;
+}
+
+/* Location Info */
+.location-info p {
+  margin: 5px 0;
+}
+
+/* Messages */
+.messages h4 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.messages button {
+  background-color: #5563de;
+  color: #fff;
+  border: none;
+  padding: 5px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.messages button:hover {
+  background-color: #4453bf;
+}
+
+.error {
+  color: red;
+  margin-top: 10px;
+}
+
+.auth-header{
+  display: flex;
+  justify-content: space-between;
+}
+.red{
+  color: red;
+  border: red;
+}
+button{
+  margin: 10px;
+}
+
+.container{
+  background: #29a997;
+  color: #2e3841;
+}
+
+.messages{
+ padding: 10px;
+    height: 200px;
+    overflow-y: auto;
+ border: 2px dashed black;
 }
