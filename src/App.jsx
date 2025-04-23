@@ -1,234 +1,294 @@
-import React, { useState, useEffect } from 'react';
+// src/App.jsx
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import './App.css';
 
 function App() {
-
-  const [mode, setMode] = useState('login');
-
-  // Form states
-  const [loginUsername, setLoginUsername] = useState('');
-  const [regUsername, setRegUsername] = useState('');
-  const [busNumbers, setBusNumbers] = useState([]);
-  const [selectedBusNumber, setSelectedBusNumber] = useState('');
-
-  // User configuration (from login/registration)
-  const [username, setUsername] = useState(localStorage.getItem('username') || '');
-  const [deviceId, setDeviceId] = useState(localStorage.getItem('deviceId') || '');
-  const [busNumber, setBusNumber] = useState(localStorage.getItem('busNumber') || '');
-  const [isLoggedIn, setIsLoggedIn] = useState(
-    !!(localStorage.getItem('username') && localStorage.getItem('deviceId'))
-  );
-
-  // Location sharing state
-  const [isSharing, setIsSharing] = useState(false);
-  const [locationData, setLocationData] = useState({});
-  const [messages, setMessages] = useState([]);
-  const [error, setError] = useState('');
-  const [showMessages, setShowMessages] = useState(true);
-
-  // Backend URL (adjust as needed)
-  const BACKENDURL = import.meta.env.VITE_BACKENDURL || 'http://localhost:5000';
-
-  // Fetch bus numbers when in registration mode
-  useEffect(() => {
-    if (mode === 'register') {
-      axios
-        .get(`${BACKENDURL}/api/busNumbers`)
-        .then((response) => {
-          setBusNumbers(response.data);
-          if (response.data.length > 0 && !selectedBusNumber) {
-            setSelectedBusNumber(response.data[0]);
-          }
-        })
-        .catch((err) => {
-          console.error('Error fetching bus numbers:', err);
-          setError('Failed to load bus numbers.');
-        });
-    }
-  }, [mode, BACKENDURL, selectedBusNumber]);
-
-  // Save user configuration to localStorage and state
-  const saveConfig = (username, busNumber, deviceId) => {
-    localStorage.setItem('username', username);
-    localStorage.setItem('busNumber', busNumber);
-    localStorage.setItem('deviceId', deviceId);
-    setUsername(username);
-    setBusNumber(busNumber);
-    setDeviceId(deviceId);
-    setIsLoggedIn(true);
+  // --- Utility functions inlined ---
+  const calculateDistance = (c1, c2) => {
+    const R = 6378137; // WGS-84 equatorial radius in meters
+    const toRad = deg => (deg * Math.PI) / 180;
+    const dLat = toRad(c2.latitude - c1.latitude);
+    const dLon = toRad(c2.longitude - c1.longitude);
+    const lat1 = toRad(c1.latitude);
+    const lat2 = toRad(c2.latitude);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
   };
 
-  // Handle login form submission
-  const handleLoginSubmit = (e) => {
+  const calculateBearing = (c1, c2) => {
+    const toRad = deg => (deg * Math.PI) / 180;
+    const toDeg = rad => (rad * 180) / Math.PI;
+    const lat1 = toRad(c1.latitude);
+    const lat2 = toRad(c2.latitude);
+    const dLon = toRad(c2.longitude - c1.longitude);
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x =
+      Math.cos(lat1) * Math.sin(lat2) -
+      Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    let brng = toDeg(Math.atan2(y, x));
+    return (brng + 360) % 360;
+  };
+
+  const lowPassFilter = (currentValue, previousValue, alpha = 0.3) => {
+    if (previousValue == null) return currentValue;
+    return alpha * currentValue + (1 - alpha) * previousValue;
+  };
+
+  // --- State ---
+  const [mode, setMode]                 = useState('login');
+  const [loginUsername, setLoginUsername] = useState('');
+  const [regUsername, setRegUsername]     = useState('');
+  const [busNumbers, setBusNumbers]     = useState([]);
+  const [selectedBusNumber, setSelectedBusNumber] = useState('');
+  const [username, setUsername]         = useState(localStorage.getItem('username') || '');
+  const [deviceId, setDeviceId]         = useState(localStorage.getItem('deviceId') || '');
+  const [busNumber, setBusNumber]       = useState(localStorage.getItem('busNumber') || '');
+  const [isLoggedIn, setIsLoggedIn]     = useState(!!(localStorage.getItem('username') && localStorage.getItem('deviceId')));
+  const [isSharing, setIsSharing]       = useState(false);
+  const [waitingForFirstFix, setWaitingForFirstFix] = useState(false);
+  const [locationData, setLocationData] = useState({});
+  const [messages, setMessages]         = useState([]);
+  const [error, setError]               = useState(() =>
+    navigator.geolocation ? '' : 'Geolocation not supported by your browser'
+  );
+  const [showMessages, setShowMessages] = useState(true);
+
+  // --- Refs & Constants ---
+  const prevRef     = useRef(null);
+  const lastTsRef   = useRef(0);
+  const intervalRef = useRef(null);
+
+  const BACKENDURL      = import.meta.env.VITE_BACKENDURL || 'http://localhost:5000';
+  const SPEED_THRESHOLD = 1;      // in m/s
+  const POLL_INTERVAL   = 1000;   // in ms
+  const GEO_OPTIONS     = { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 };
+
+  // --- Load bus numbers ---
+  useEffect(() => {
+    axios.get(`${BACKENDURL}/api/busNumbers`)
+      .then(({ data }) => setBusNumbers(data))
+      .catch(err => console.error('Failed to fetch bus numbers:', err));
+  }, [BACKENDURL]);
+
+  // --- Persist / clear user config ---
+  const saveConfig = (u, b, d) => {
+    localStorage.setItem('username', u);
+    localStorage.setItem('busNumber', b);
+    localStorage.setItem('deviceId', d);
+    setUsername(u);
+    setBusNumber(b);
+    setDeviceId(d);
+    setIsLoggedIn(true);
+  };
+  const handleLogout = () => {
+    localStorage.clear();
+    setIsSharing(false);
+    setMessages([]);
+    setIsLoggedIn(false);
+  };
+
+  // --- Handle a GPS fix ---
+  const handlePosition = pos => {
+    if (waitingForFirstFix) setWaitingForFirstFix(false);
+
+    const now = pos.timestamp;                 // use device-provided timestamp
+    if (now - lastTsRef.current < 1000) return; // throttle to 1/sec
+    lastTsRef.current = now;
+    const iso = new Date(now).toISOString();
+
+    const { latitude, longitude, altitude, accuracy } = pos.coords;
+
+    // initialize raw speed & bearing
+    let spd = 0, brg = 0;
+
+    const prev = prevRef.current;
+    if (prev) {
+      const dt   = (now - prev.ts) / 1000;    // sec
+      const dist2d = calculateDistance(prev.coords, pos.coords);
+      const altDiff = (altitude ?? 0) - (prev.coords.altitude ?? 0);
+      const dist3d  = Math.sqrt(dist2d*dist2d + altDiff*altDiff);
+      spd = dist3d / dt;                      // m/s
+      brg = calculateBearing(prev.coords, pos.coords);
+    }
+
+    const smoothedSpeed   = lowPassFilter(spd, prev?.smoothedSpeed);
+    const smoothedHeading = lowPassFilter(brg, prev?.smoothedHeading);
+
+    const status =
+      smoothedSpeed > SPEED_THRESHOLD ||
+      (locationData.status === 'moving' && smoothedSpeed > SPEED_THRESHOLD * 0.8)
+        ? 'moving'
+        : 'stopped';
+
+    const newData = {
+      latitude,
+      longitude,
+      altitude,
+      accuracy,
+      speed: smoothedSpeed,
+      heading: smoothedHeading,
+      status,
+      timestamp: iso
+    };
+
+    setLocationData(newData);
+    prevRef.current = {
+      coords: pos.coords,
+      ts: now,
+      smoothedSpeed,
+      smoothedHeading
+    };
+
+    axios.post(`${BACKENDURL}/api/location`, { busNumber, deviceId, ...newData })
+      .then(() => {
+        const t = new Date(now).toLocaleTimeString();
+        const msg = `Shared at ${t}: Lat ${latitude.toFixed(5)}, Lon ${longitude.toFixed(5)}, ` +
+                    `Speed ${smoothedSpeed.toFixed(1)} m/s (${status}), ` +
+                    `Heading ${smoothedHeading.toFixed(1)}°`;
+        setMessages(m => [msg, ...m.slice(0, 49)]);
+      })
+      .catch(err => {
+        console.error('Location share error:', err);
+        setError('Failed to share location.');
+      });
+  };
+
+  // --- Start / Stop sharing ---
+  const handleStartSharing = () => {
+    setError('');
+    setWaitingForFirstFix(true);
+
+    navigator.geolocation.getCurrentPosition(
+      handlePosition,
+      err => {
+        console.error('Initial fix error:', err);
+        setError(`Location error: ${err.message}`);
+        setWaitingForFirstFix(false);
+      },
+      GEO_OPTIONS
+    );
+
+    setIsSharing(true);
+    intervalRef.current = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        handlePosition,
+        err => console.error('Polling error:', err),
+        GEO_OPTIONS
+      );
+    }, POLL_INTERVAL);
+  };
+
+  const handleStopSharing = () => {
+    setIsSharing(false);
+    clearInterval(intervalRef.current);
+    intervalRef.current = null;
+  };
+
+  // --- Permission check ---
+  useEffect(() => {
+    navigator.permissions?.query({ name: 'geolocation' })
+      .then(r => {
+        if (r.state === 'denied') {
+          setError('Location permissions denied. Please enable in browser settings.');
+        }
+      });
+  }, []);
+
+  // --- Login & Register ---
+  const handleLoginSubmit = e => {
     e.preventDefault();
     if (!loginUsername) {
       setError('Username is required.');
       return;
     }
-    axios
-      .post(`${BACKENDURL}/api/login`, { username: loginUsername })
-      .then((response) => {
-        const { username, busNumber, deviceId } = response.data;
-        saveConfig(username, busNumber, deviceId);
+    axios.post(`${BACKENDURL}/api/login`, { username: loginUsername })
+      .then(({ data }) => {
+        saveConfig(data.username, data.busNumber, data.deviceId);
         setError('');
-        setMessages((prev) => [
-          `Logged in as ${username} (Bus: ${busNumber}, Device ID: ${deviceId})`,
-          ...prev,
+        setMessages(m => [
+          `Logged in as ${data.username} (Bus: ${data.busNumber}, Device ID: ${data.deviceId})`,
+          ...m,
         ]);
       })
-      .catch((err) => {
+      .catch(err => {
         console.error('Login error:', err);
         setError(err.response?.data?.message || 'Login failed.');
       });
   };
 
-  // Handle registration form submission
-  const handleRegisterSubmit = (e) => {
+  const handleRegisterSubmit = e => {
     e.preventDefault();
     if (!regUsername || !selectedBusNumber) {
       setError('Username and bus number are required.');
       return;
     }
-    axios
-      .post(`${BACKENDURL}/api/register`, { username: regUsername, busNumber: selectedBusNumber })
-      .then((response) => {
-        const { username, busNumber, deviceId } = response.data;
-        saveConfig(username, busNumber, deviceId);
+    axios.post(`${BACKENDURL}/api/register`, {
+      username: regUsername,
+      busNumber: selectedBusNumber
+    })
+      .then(({ data }) => {
+        saveConfig(data.username, data.busNumber, data.deviceId);
         setError('');
-        setMessages((prev) => [
-          `Registered for bus ${busNumber} with Device ID: ${deviceId}`,
-          ...prev,
+        setMessages(m => [
+          `Registered for bus ${data.busNumber} with Device ID: ${data.deviceId}`,
+          ...m
         ]);
       })
-      .catch((err) => {
+      .catch(err => {
         console.error('Registration error:', err);
         setError(err.response?.data?.message || 'Registration failed.');
       });
   };
 
-  // Logout handler
-  const handleLogout = () => {
-    localStorage.clear();
-    setUsername('');
-    setBusNumber('');
-    setDeviceId('');
-    setIsLoggedIn(false);
-    setIsSharing(false);
-    setMessages([]);
-    setError('');
-    setLoginUsername('');
-    setRegUsername('');
-  };
+  const toggleMessages = () => setShowMessages(v => !v);
 
-  // Toggle visibility of location update messages
-  const toggleMessages = () => {
-    setShowMessages((prev) => !prev);
-  };
-
-  // Share location every 5 seconds when enabled
-  useEffect(() => {
-    let intervalId;
-    if (isSharing && isLoggedIn) {
-      const fetchLocation = () => {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude, speed, heading, altitude, accuracy } = position.coords;
-            const status = speed && speed > 0 ? 'moving' : 'stopped';
-            const timestamp = new Date().toISOString();
-            const data = { latitude, longitude, speed, heading, altitude, accuracy, status, timestamp };
-            setLocationData(data);
-            axios
-              .post(`${BACKENDURL}/api/location`, { busNumber, deviceId, ...data })
-              .then(() => {
-                const currentTime = new Date().toLocaleTimeString();
-                const msg = `Shared at ${currentTime}: Lat ${latitude.toFixed(5)}, Lon ${longitude.toFixed(
-                  5
-                )}, Speed ${speed} m/s (${status})`;
-                setMessages((prev) => [msg, ...prev]);
-              })
-              .catch((err) => {
-                console.error('Location share error:', err);
-                setError('Failed to share location.');
-              });
-          },
-          (err) => {
-            console.error('Geolocation error:', err);
-            setError(`Error fetching location: ${err.message}`);
-          },
-          { enableHighAccuracy: true, maximumAge: 1000 }
-        );
-      };
-      fetchLocation();
-      intervalId = setInterval(fetchLocation, 5000);
-    }
-    return () => clearInterval(intervalId);
-  }, [isSharing, isLoggedIn, BACKENDURL, busNumber, deviceId]);
-
-  const handleStartSharing = () => {
-    if (!busNumber) {
-      setError('Bus number is required.');
-    } else {
-      setError('');
-      setIsSharing(true);
-    }
-  };
-
-  const handleStopSharing = () => {
-    setIsSharing(false);
-  };
-
-  // --- Render Login / Registration UI if not logged in ---
+  // --- Render UI ---
   if (!isLoggedIn) {
     return (
       <div className="container">
         <h2>GPS Device Tracker</h2>
         {mode === 'login' ? (
           <form onSubmit={handleLoginSubmit}>
-            <label htmlFor="loginUsername">Username</label>
+            <label>Username</label>
             <input
-              type="text"
-              id="loginUsername"
-              placeholder="Enter username"
               value={loginUsername}
-              onChange={(e) => setLoginUsername(e.target.value)}
+              onChange={e => setLoginUsername(e.target.value)}
+              placeholder="Enter username"
             />
             <button type="submit">Login</button>
             <p className="toggle-link">
-              Don't have an account? <span onClick={() => setMode('register')}>Register here</span>
+              Don't have an account?{' '}
+              <span onClick={() => setMode('register')}>Register here</span>
             </p>
           </form>
         ) : (
           <form onSubmit={handleRegisterSubmit}>
-            <label htmlFor="regUsername">Username</label>
+            <label>Username</label>
             <input
-              type="text"
-              id="regUsername"
-              placeholder="Enter username"
               value={regUsername}
-              onChange={(e) => setRegUsername(e.target.value)}
+              onChange={e => setRegUsername(e.target.value)}
+              placeholder="Enter username"
             />
-            <label htmlFor="busSelect">Select Bus Number</label>
+            <label>Select Bus</label>
             <select
-              id="busSelect"
               value={selectedBusNumber}
-              onChange={(e) => setSelectedBusNumber(e.target.value)}
+              onChange={e => setSelectedBusNumber(e.target.value)}
             >
-              {busNumbers.length > 0 ? (
-                busNumbers.map((num, idx) => (
-                  <option key={idx} value={num}>
-                    {num}
-                  </option>
-                ))
-              ) : (
-                <option value="">No buses available</option>
-              )}
+              <option value="">-- select --</option>
+              {busNumbers.map(n => (
+                <option key={n} value={n}>{n}</option>
+              ))}
             </select>
-            <button type="submit" disabled={busNumbers.length === 0}>
+            <button type="submit" disabled={!selectedBusNumber}>
               Register
             </button>
             <p className="toggle-link">
-              Already have an account? <span onClick={() => setMode('login')}>Login here</span>
+              Already have an account?{' '}
+              <span onClick={() => setMode('login')}>Login here</span>
             </p>
           </form>
         )}
@@ -237,48 +297,48 @@ function App() {
     );
   }
 
-  // --- Render the Main Location Sharing UI if logged in ---
   return (
     <div className="container">
       <h2>GPS Device Tracker</h2>
+
       <div className="user-info">
-        <p>
-          <strong>Username:</strong> {username}
-        </p>
-        <p>
-          <strong>Registered Bus:</strong> {busNumber}
-        </p>
-        <p>
-          <strong>Device ID:</strong> {deviceId}
-        </p>
-        <button className="logout-btn" onClick={handleLogout}>
-          Logout
-        </button>
+        <p><strong>Username:</strong> {username}</p>
+        <p><strong>Bus:</strong> {busNumber}</p>
+        <p><strong>Device ID:</strong> {deviceId}</p>
+        <button onClick={handleLogout}>Logout</button>
       </div>
+
       <div className="controls">
         <button onClick={handleStartSharing} disabled={isSharing}>
-          Start Sharing Location
+          Start Sharing
         </button>
         <button onClick={handleStopSharing} disabled={!isSharing}>
-          Stop Sharing Location
+          Stop Sharing
         </button>
+        {isSharing && waitingForFirstFix && (
+          <p className="please-wait">Acquiring & sending location…</p>
+        )}
       </div>
+
       <div className="location-info">
-        <p>
-          <strong>Current Location:</strong>
-        </p>
-        <p>Latitude: {locationData.latitude ? locationData.latitude.toFixed(5) : 'N/A'}</p>
-        <p>Longitude: {locationData.longitude ? locationData.longitude.toFixed(5) : 'N/A'}</p>
-        <p>Speed: {locationData.speed !== undefined ? `${locationData.speed} m/s` : 'N/A'}</p>
-        <p>Status: {locationData.status || 'N/A'}</p>
+        <p><strong>Latitude:</strong>  {locationData.latitude?.toFixed(5) ?? 'N/A'}</p>
+        <p><strong>Longitude:</strong> {locationData.longitude?.toFixed(5) ?? 'N/A'}</p>
+        <p><strong>Speed:</strong>     {locationData.speed?.toFixed(1) ?? 'N/A'} m/s</p>
+        <p><strong>Heading:</strong>   {locationData.heading?.toFixed(1) ?? 'N/A'}°</p>
+        <p><strong>Altitude:</strong>  {locationData.altitude ?? 'N/A'} m</p>
+        <p><strong>Accuracy:</strong>  {locationData.accuracy ?? 'N/A'} m</p>
+        <p><strong>Status:</strong>    {locationData.status ?? 'N/A'}</p>
       </div>
+
       <div className="messages">
         <h4>
-          Location Updates
-          <button onClick={toggleMessages}>{showMessages ? 'Hide' : 'Show'}</button>
+          Location Updates{' '}
+          <button onClick={toggleMessages}>
+            {showMessages ? 'Hide' : 'Show'}
+          </button>
         </h4>
         {error && <p className="error">{error}</p>}
-        {showMessages && messages.map((msg, idx) => <p key={idx}>{msg}</p>)}
+        {showMessages && messages.map((m, i) => <p key={i}>{m}</p>)}
       </div>
     </div>
   );
