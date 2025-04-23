@@ -33,7 +33,7 @@ function App() {
     return (brng + 360) % 360;
   };
 
-  const lowPassFilter = (currentValue, previousValue, alpha = 0.3) => {
+  const lowPassFilter = (currentValue, previousValue, alpha = 0.2) => {
     if (previousValue == null) return currentValue;
     return alpha * currentValue + (1 - alpha) * previousValue;
   };
@@ -103,7 +103,9 @@ function App() {
     const { latitude, longitude, altitude, accuracy } = pos.coords;
 
     // initialize raw speed & bearing
-    let spd = 0, brg = 0;
+   
+    let spd = pos.coords.speed ?? 0;
+    let brg = pos.coords.heading ?? 0;
 
     const prev = prevRef.current;
     if (prev) {
@@ -111,18 +113,19 @@ function App() {
       const dist2d = calculateDistance(prev.coords, pos.coords);
       const altDiff = (altitude ?? 0) - (prev.coords.altitude ?? 0);
       const dist3d  = Math.sqrt(dist2d*dist2d + altDiff*altDiff);
-      spd = dist3d / dt;                      // m/s
-      brg = calculateBearing(prev.coords, pos.coords);
+      if (spd == null)       spd = dist3d / dt;                      // m/s
+      if (brg == null)       brg = calculateBearing(prev.coords, pos.coords);
     }
 
     const smoothedSpeed   = lowPassFilter(spd, prev?.smoothedSpeed);
     const smoothedHeading = lowPassFilter(brg, prev?.smoothedHeading);
 
-    const status =
-      smoothedSpeed > SPEED_THRESHOLD ||
-      (locationData.status === 'moving' && smoothedSpeed > SPEED_THRESHOLD * 0.8)
-        ? 'moving'
-        : 'stopped';
+    const status = smoothedSpeed > SPEED_THRESHOLD ? 'moving' : 'stopped';
+
+       // if we’re stopped, keep last heading
+        const finalHeading = status === 'stopped'
+          ? prev?.smoothedHeading ?? smoothedHeading
+          : smoothedHeading;
 
     const newData = {
       latitude,
@@ -130,7 +133,7 @@ function App() {
       altitude,
       accuracy,
       speed: smoothedSpeed,
-      heading: smoothedHeading,
+      heading: finalHeading,
       status,
       timestamp: iso
     };
