@@ -4,9 +4,24 @@ import axios from 'axios';
 import './App.css';
 
 function App() {
-  // --- Utility functions inlined ---
+  const prevLocRef     = useRef(null);
+  const prevHeadingRef = useRef(null)
+  const [compassHeading, setCompassHeading] = useState(null);
+  useEffect(() => {
+    function onOrient(e) {
+      const h = e.webkitCompassHeading ?? (e.alpha != null ? 360 - e.alpha : null);
+      setCompassHeading(h);
+    }
+    window.addEventListener('deviceorientationabsolute', onOrient, true);
+    window.addEventListener('deviceorientation', onOrient, true);
+    return () => {
+      window.removeEventListener('deviceorientationabsolute', onOrient);
+      window.removeEventListener('deviceorientation', onOrient);
+    };
+  }, []);
+
   const calculateDistance = (c1, c2) => {
-    const R = 6378137; // WGS-84 equatorial radius in meters
+    const R = 6378137;
     const toRad = deg => (deg * Math.PI) / 180;
     const dLat = toRad(c2.latitude - c1.latitude);
     const dLon = toRad(c2.longitude - c1.longitude);
@@ -15,8 +30,7 @@ function App() {
     const a =
       Math.sin(dLat / 2) ** 2 +
       Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
   const calculateBearing = (c1, c2) => {
@@ -33,43 +47,44 @@ function App() {
     return (brng + 360) % 360;
   };
 
+  // kept but not applied
   const lowPassFilter = (currentValue, previousValue, alpha = 0.2) => {
     if (previousValue == null) return currentValue;
     return alpha * currentValue + (1 - alpha) * previousValue;
   };
 
   // --- State ---
-  const [mode, setMode]                 = useState('login');
+  const [mode, setMode]                   = useState('login');
   const [loginUsername, setLoginUsername] = useState('');
   const [regUsername, setRegUsername]     = useState('');
-  const [busNumbers, setBusNumbers]     = useState([]);
+  const [busNumbers, setBusNumbers]       = useState([]);
   const [selectedBusNumber, setSelectedBusNumber] = useState('');
-  const [username, setUsername]         = useState(localStorage.getItem('username') || '');
-  const [deviceId, setDeviceId]         = useState(localStorage.getItem('deviceId') || '');
-  const [busNumber, setBusNumber]       = useState(localStorage.getItem('busNumber') || '');
-  const [isLoggedIn, setIsLoggedIn]     = useState(!!(localStorage.getItem('username') && localStorage.getItem('deviceId')));
-  const [isSharing, setIsSharing]       = useState(false);
+  const [username, setUsername]           = useState(localStorage.getItem('username') || '');
+  const [deviceId, setDeviceId]           = useState(localStorage.getItem('deviceId') || '');
+  const [busNumber, setBusNumber]         = useState(localStorage.getItem('busNumber') || '');
+  const [isLoggedIn, setIsLoggedIn]       = useState(!!(localStorage.getItem('username') && localStorage.getItem('deviceId')));
+  const [isSharing, setIsSharing]         = useState(false);           // ← add this
   const [waitingForFirstFix, setWaitingForFirstFix] = useState(false);
-  const [locationData, setLocationData] = useState({});
-  const [messages, setMessages]         = useState([]);
-  const [error, setError]               = useState(() =>
+  const [locationData, setLocationData]   = useState({});
+  const [messages, setMessages]           = useState([]);
+  const [error, setError]                 = useState(() =>
     navigator.geolocation ? '' : 'Geolocation not supported by your browser'
   );
-  const [showMessages, setShowMessages] = useState(true);
+  const [showMessages, setShowMessages]   = useState(true);
 
   // --- Refs & Constants ---
-  const prevRef     = useRef(null);
-  const lastTsRef   = useRef(0);
   const intervalRef = useRef(null);
+  const lastTsRef   = useRef(0);
 
-  const BACKENDURL      = import.meta.env.VITE_BACKENDURL || 'http://localhost:5000';
-  const SPEED_THRESHOLD = 1;      // in m/s
-  const POLL_INTERVAL   = 1000;   // in ms
+  const BACKENDURL     = import.meta.env.VITE_BACKENDURL || 'http://localhost:5000';
+  const SPEED_THRESHOLD = 1;     // m/s
+  const POLL_INTERVAL   = 2000;  // now 2 seconds
   const GEO_OPTIONS     = { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 };
 
   // --- Load bus numbers ---
   useEffect(() => {
-    axios.get(`${BACKENDURL}/api/busNumbers`)
+        // drop BACKENDURL prefix and rely on Vite proxy
+        axios.get('/api/busNumbers')
       .then(({ data }) => setBusNumbers(data))
       .catch(err => console.error('Failed to fetch bus numbers:', err));
   }, [BACKENDURL]);
@@ -89,69 +104,63 @@ function App() {
     setIsSharing(false);
     setMessages([]);
     setIsLoggedIn(false);
+    clearInterval(intervalRef.current);
   };
 
   // --- Handle a GPS fix ---
   const handlePosition = pos => {
     if (waitingForFirstFix) setWaitingForFirstFix(false);
 
-    const now = pos.timestamp;                 // use device-provided timestamp
-    if (now - lastTsRef.current < 1000) return; // throttle to 1/sec
+    const now = pos.timestamp;
+    if (now - lastTsRef.current < 1000) return; // throttle 1 Hz
     lastTsRef.current = now;
-    const iso = new Date(now).toISOString();
-
-    const { latitude, longitude, altitude, accuracy } = pos.coords;
-
-    // initialize raw speed & bearing
-   
-    let spd = pos.coords.speed ?? 0;
-    let brg = pos.coords.heading ?? 0;
-
-    const prev = prevRef.current;
-    if (prev) {
-      const dt   = (now - prev.ts) / 1000;    // sec
-      const dist2d = calculateDistance(prev.coords, pos.coords);
-      const altDiff = (altitude ?? 0) - (prev.coords.altitude ?? 0);
-      const dist3d  = Math.sqrt(dist2d*dist2d + altDiff*altDiff);
-      if (spd == null)       spd = dist3d / dt;                      // m/s
-      if (brg == null)       brg = calculateBearing(prev.coords, pos.coords);
-    }
-
-    const smoothedSpeed   = lowPassFilter(spd, prev?.smoothedSpeed);
-    const smoothedHeading = lowPassFilter(brg, prev?.smoothedHeading);
-
-    const status = smoothedSpeed > SPEED_THRESHOLD ? 'moving' : 'stopped';
-
-       // if we’re stopped, keep last heading
-        const finalHeading = status === 'stopped'
-          ? prev?.smoothedHeading ?? smoothedHeading
-          : smoothedHeading;
-
-    const newData = {
+    // always store full ISO string so `new Date(...)` works
+    const iso = new Date(now).toISOString();  
+    const { latitude, longitude, altitude, accuracy, heading: geoHeading } = pos.coords;
+    
+        // → pick the true device heading when available,
+        //    otherwise keep last known or fallback to compassHeading
+        const headingToUse = geoHeading != null
+          ? geoHeading
+          : (prevHeadingRef.current ?? compassHeading);
+        prevHeadingRef.current = headingToUse;
+    
+        // → compute speed from last fix → this fix
+        let speedCalc = 0;
+        if (prevLocRef.current) {
+          const dist = calculateDistance(prevLocRef.current, { latitude, longitude });
+          const dt   = (pos.timestamp - prevLocRef.current.timestamp) / 1000;
+        speedCalc = dt > 0 ? dist / dt : 0;
+        }
+        prevLocRef.current = { latitude, longitude, timestamp: pos.timestamp };
+    
+    const payload = {
+      busNumber,
+      deviceId,
       latitude,
       longitude,
       altitude,
       accuracy,
-      speed: smoothedSpeed,
-      heading: finalHeading,
-      status,
-      timestamp: iso
+      heading: headingToUse,
+      status: 'unknown',
+      timestamp: iso,
+      speed: speedCalc
     };
 
-    setLocationData(newData);
-    prevRef.current = {
-      coords: pos.coords,
-      ts: now,
-      smoothedSpeed,
-      smoothedHeading
-    };
-
-    axios.post(`${BACKENDURL}/api/location`, { busNumber, deviceId, ...newData })
-      .then(() => {
-        const t = new Date(now).toLocaleTimeString();
-        const msg = `Shared at ${t}: Lat ${latitude.toFixed(5)}, Lon ${longitude.toFixed(5)}, ` +
-                    `Speed ${smoothedSpeed.toFixed(1)} m/s (${status}), ` +
-                    `Heading ${smoothedHeading.toFixed(1)}°`;
+    setLocationData(prev => ({
+            ...prev,
+            latitude, longitude,
+            heading: headingToUse,
+            speed: speedCalc,
+            timestamp: iso
+          }));
+    axios.post(`${BACKENDURL}/api/location`, payload)
+      .then(({ data }) => {
+        const loc = data.location;
+        setLocationData(loc);
+        const t   = new Date(loc.timestamp).toLocaleTimeString('en-GB', { hour12: false });
+        const msg = `At ${t}: Lat ${loc.latitude.toFixed(5)}, Lon ${loc.longitude.toFixed(5)}, ` +
+                    `Speed ${loc.speed.toFixed(2)} m/s, Status ${loc.status}`;
         setMessages(m => [msg, ...m.slice(0, 49)]);
       })
       .catch(err => {
@@ -184,11 +193,9 @@ function App() {
       );
     }, POLL_INTERVAL);
   };
-
   const handleStopSharing = () => {
     setIsSharing(false);
     clearInterval(intervalRef.current);
-    intervalRef.current = null;
   };
 
   // --- Permission check ---
@@ -326,11 +333,12 @@ function App() {
       <div className="location-info">
         <p><strong>Latitude:</strong>  {locationData.latitude?.toFixed(5) ?? 'N/A'}</p>
         <p><strong>Longitude:</strong> {locationData.longitude?.toFixed(5) ?? 'N/A'}</p>
-        <p><strong>Speed:</strong>     {locationData.speed?.toFixed(1) ?? 'N/A'} m/s</p>
+        <p><strong>Speed:</strong>     {locationData.speed?.toFixed(2) ?? 'N/A'} m/s</p>
         <p><strong>Heading:</strong>   {locationData.heading?.toFixed(1) ?? 'N/A'}°</p>
         <p><strong>Altitude:</strong>  {locationData.altitude ?? 'N/A'} m</p>
         <p><strong>Accuracy:</strong>  {locationData.accuracy ?? 'N/A'} m</p>
         <p><strong>Status:</strong>    {locationData.status ?? 'N/A'}</p>
+        <p><strong>Timestamp:</strong> {locationData.timestamp ? new Date(locationData.timestamp)                .toLocaleTimeString('en-GB', { hour12: false })           : 'N/A'       }</p>
       </div>
 
       <div className="messages">
