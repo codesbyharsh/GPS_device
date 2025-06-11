@@ -47,4 +47,4 @@ npm run dev
 # or
 npm start
 ```
-App will run locally on: http://localhost:5000 
+App will run locally on: http://localhost:5173 or 74
