@@ -1,8 +1,50 @@
-# React + Vite
+# 🚍 E-Transit – GPS Device Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This is the **Frontend** part of the **GPS Device Tracking System**, which is a key module in the **E-Transit** application. It allows real-time location visualization for buses using data pushed from GPS devices.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## ⚙️ Tech Stack
+
+- React
+- JavaScript (ES6+)
+- Vite
+- Axios
+- dotenv
+
+---
+
+## 📦 Prerequisites
+
+- Node.js and npm installed
+- A `.env` file configured (sample provided in repo)
+
+---
+
+### 🛠️ Setup Instructions
+
+## 1. Clone the Repository
+
+```bash
+git clone https://github.com/your-username/gps-device-frontend.git
+cd gps-device-frontend
+```
+## 2. Install Dependencies
+
+```bash
+npm install
+# or
+npm i
+```
+## 3. Create .env file
+```bash
+Create a .env file in the root directory.
+refer sample .env file for it
+```
+## 3. Run the Application
+```bash
+npm run dev
+# or
+npm start
+```
+App will run locally on: http://localhost:5000 
